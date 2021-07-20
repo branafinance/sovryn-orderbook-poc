@@ -125,8 +125,7 @@ contract OrderBook {
         id = _next_id();
         offers[id] = info;
 
-        pay_gem.transferFrom(msg.sender, address(this), pay_amt);
-
+        safeTransferFrom(pay_gem, msg.sender, address(this), pay_amt);
 
         emit LogMake(
             bytes32(id),
@@ -175,10 +174,8 @@ contract OrderBook {
         offers[id].pay_amt = offer.pay_amt.sub(quantity);
         offers[id].buy_amt = offer.buy_amt.sub(spend);
         
-        offer.buy_gem.transferFrom(msg.sender, offer.owner, spend);
-
-        offer.pay_gem.transfer(msg.sender, quantity);
-
+        safeTransferFrom(offer.buy_gem, msg.sender, offer.owner, spend);
+        safeTransfer(offer.pay_gem, msg.sender, quantity);
 
         if (offers[id].pay_amt == 0) {
           delete offers[id];
@@ -215,7 +212,7 @@ contract OrderBook {
         OfferInfo memory offer = offers[id];
         delete offers[id];
 
-        offer.pay_gem.transfer(offer.owner, offer.pay_amt);
+        safeTransfer(offer.pay_gem, offer.owner, offer.pay_amt);
 
          emit LogKill(
             bytes32(id),
@@ -234,6 +231,26 @@ contract OrderBook {
 
     function getOwner(uint id) public view returns (address owner) {
         return offers[id].owner;
+    }
+
+    function safeTransfer(ERC20 token, address to, uint256 value) internal {
+        _callOptionalReturn(token, abi.encodeWithSelector(token.transfer.selector, to, value));
+    }
+
+    function safeTransferFrom(ERC20 token, address from, address to, uint256 value) internal {
+        _callOptionalReturn(token, abi.encodeWithSelector(token.transferFrom.selector, from, to, value));
+    }
+
+    function _callOptionalReturn(ERC20 token, bytes memory data) private {
+        uint256 size;
+        assembly { size := extcodesize(token) }
+        require(size > 0, "Not a contract");
+
+        (bool success, bytes memory returndata) = address(token).call(data);
+        require(success, "Token call failed");
+        if (returndata.length > 0) { // Return data is optional
+            require(abi.decode(returndata, (bool)), "SafeERC20: ERC20 operation did not succeed");
+        }
     }
 
 
