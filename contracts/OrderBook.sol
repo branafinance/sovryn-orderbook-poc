@@ -4,6 +4,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 
+
 abstract contract ISovrynNetwork {
     function convertByPath(
         address[] calldata _path, 
@@ -26,6 +27,42 @@ abstract contract ISovrynNetwork {
 }
 
 contract OrderBook {
+
+     event LogMake(
+        bytes32  indexed  id,
+        bytes32  indexed  pair,
+        address  indexed  maker,
+        ERC20             pay_gem,
+        ERC20             buy_gem,
+        uint128           pay_amt,
+        uint128           buy_amt,
+        uint64            timestamp
+    );
+
+
+    event LogTake(
+        bytes32           id,
+        bytes32  indexed  pair,
+        address  indexed  maker,
+        ERC20             pay_gem,
+        ERC20             buy_gem,
+        address  indexed  taker,
+        uint128           take_amt,
+        uint128           give_amt,
+        uint64            timestamp
+    );
+
+    event LogKill(
+        bytes32  indexed  id,
+        bytes32  indexed  pair,
+        address  indexed  maker,
+        ERC20             pay_gem,
+        ERC20             buy_gem,
+        uint128           pay_amt,
+        uint128           buy_amt,
+        uint64            timestamp
+    );
+
 
     mapping (uint => OfferInfo) public offers;
     uint public last_offer_id;
@@ -66,8 +103,10 @@ contract OrderBook {
     }
 
     // Make a new offer. Takes funds from the caller into market escrow.
-    function makeOffer(uint pay_amt, ERC20 pay_gem, uint buy_amt, ERC20 buy_gem) public returns (uint id)
+    function makeOffer(uint pay_amt, address payGemAddress, uint buy_amt, address buyGemAddress) public returns (uint id)
     {
+        ERC20 pay_gem = ERC20(payGemAddress);
+        ERC20 buy_gem = ERC20(buyGemAddress);
         require(uint128(pay_amt) == pay_amt);
         require(uint128(buy_amt) == buy_amt);
         require(pay_amt > 0);
@@ -86,7 +125,23 @@ contract OrderBook {
         id = _next_id();
         offers[id] = info;
 
-        safeTransferFrom(pay_gem, msg.sender, address(this), pay_amt);
+        pay_gem.transferFrom(msg.sender, address(this), pay_amt);
+
+
+        emit LogMake(
+            bytes32(id),
+            keccak256(abi.encodePacked(info.pay_gem, info.buy_gem)),
+            info.owner,
+            info.pay_gem,
+            info.buy_gem,
+            uint128(info.pay_amt),
+            uint128(info.buy_amt),
+            uint64(block.timestamp)
+        );
+
+
+        return id;
+
 
     }
 
@@ -97,22 +152,6 @@ contract OrderBook {
         last_offer_id++; return last_offer_id;
     }
 
- function _callOptionalReturn(ERC20 token, bytes memory data) private {
-        uint256 size;
-        assembly { size := extcodesize(token) }
-        require(size > 0, "Not a contract");
-
-        (bool success, bytes memory returndata) = address(token).call(data);
-        require(success, "Token call failed");
-        if (returndata.length > 0) { // Return data is optional
-            require(abi.decode(returndata, (bool)), "SafeERC20: ERC20 operation did not succeed");
-        }
-    }
-
-
-    function safeTransferFrom(ERC20 token, address from, address to, uint256 value) internal {
-        _callOptionalReturn(token, abi.encodeWithSelector(token.transferFrom.selector, from, to, value));
-    }
 
 
        // Accept given `quantity` of an offer. Transfers funds from caller to
@@ -135,18 +174,66 @@ contract OrderBook {
 
         offers[id].pay_amt = offer.pay_amt.sub(quantity);
         offers[id].buy_amt = offer.buy_amt.sub(spend);
-        safeTransferFrom(offer.buy_gem, msg.sender, offer.owner, spend);
-        safeTransfer(offer.pay_gem, msg.sender, quantity);
+        
+        offer.buy_gem.transferFrom(msg.sender, offer.owner, spend);
+
+        offer.pay_gem.transfer(msg.sender, quantity);
+
 
         if (offers[id].pay_amt == 0) {
           delete offers[id];
         }
 
+        emit LogTake(
+            bytes32(id),
+            keccak256(abi.encodePacked(offer.pay_gem, offer.buy_gem)),
+            offer.owner,
+            offer.pay_gem,
+            offer.buy_gem,
+            msg.sender,
+            uint128(offer.pay_amt),
+            uint128(offer.buy_amt),
+            uint64(block.timestamp)
+        );
+
+
         return true;
     }
 
-    function safeTransfer(ERC20 token, address to, uint256 value) internal {
-        _callOptionalReturn(token, abi.encodeWithSelector(token.transfer.selector, to, value));
+
+    modifier can_cancel(uint id) {
+        require(getOwner(id) == msg.sender);
+        _;
+    }
+
+
+    function cancel(uint id)
+        public
+        can_cancel(id)
+        returns (bool success)
+    {
+        OfferInfo memory offer = offers[id];
+        delete offers[id];
+
+        offer.pay_gem.transfer(offer.owner, offer.pay_amt);
+
+         emit LogKill(
+            bytes32(id),
+            keccak256(abi.encodePacked(offer.pay_gem, offer.buy_gem)),
+            offer.owner,
+            offer.pay_gem,
+            offer.buy_gem,
+            uint128(offer.pay_amt),
+            uint128(offer.buy_amt),
+            uint64(block.timestamp)
+        );
+
+
+        success = true;
+    }
+
+    function getOwner(uint id) public view returns (address owner) {
+        return offers[id].owner;
     }
 
 
