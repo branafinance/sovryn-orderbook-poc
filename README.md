@@ -15,7 +15,7 @@ Make sure you have SOV and WRBTC in testnet to run all the examples
 truffle console --network testnet
 in truffle: 
 
-```
+```typescript
 migrate
 
 const deployedContractInstance = await OrderBook.deployed()
