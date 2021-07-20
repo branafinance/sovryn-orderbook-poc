@@ -1,7 +1,7 @@
 
 # Sovrython Decentralised-Order-Book #
 
-POC of what a Decentralised Order Book could like, I tried to keep it as simple as possible to later build a robust UI on top of it, minimize surface of attack / bugs on solidity and to make it simple to quickly review and understand.
+POC of what a Decentralised Order Book could look like, I tried to keep it as simple as possible to later build a robust UI on top of it, minimize surface of attack / bugs on solidity and to make it simple to quickly review and understand.
 This is not meant as a production ready descentralized order book.
 
 Initially I had a lot of the logic of matching orders, sorting written in solidity however after review I realized that that logic of matching orders implemenation can also be descentralized as long as you can get all the orders and interact with them.
