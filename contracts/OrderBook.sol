@@ -60,7 +60,7 @@ contract OrderBook {
         external payable returns (uint256) {
         address[] memory path = getSovrynConversionPath(from, to);
         uint256 estimatedTokens = sovrynNetwork.rateByPath(path, amount);
-        require(estimatedTokens >= minExpected);
+        require(estimatedTokens >= minExpected, "estimatedTokens are not larger than min expectd");
         uint256 fee = 0;
         return sovrynNetwork.convertByPath(path, amount, minExpected, msg.sender, address(this), fee);
     }
